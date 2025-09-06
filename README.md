@@ -1,144 +1,280 @@
-import json
+# LongCat Unofficial Python Client
+
+An unofficial Python client library for interacting with the LongCat Chat API, providing unlimited, no-billing access with integrated search and reasoning features. Lightweight wrapper for LongCat's streaming chat API with conversation history management.
+
+## Installation
+
+```bash
+pip install requests
+```
+
+Clone the repository:
+```bash
+git clone https://github.com/yourusername/longcat-unofficial.git
+cd longcat-unofficial
+```
+
+## Quick Start
+
+```python
+from chat import LongCatChat
+
+# Initialize client
+chatbot = LongCatChat()
+
+# Simple chat message
+response = chatbot.send_message("What is the capital of France?")
+print(response)
+
+# Enable search and reasoning
+response = chatbot.send_message(
+    "Explain quantum computing",
+    enable_search=True,
+    enable_reason=True
+)
+print(response)
+```
+
+## Features
+
+- **Unlimited Usage**: No billing or rate limits
+- **Search Integration**: Enable web search for up-to-date information
+- **Reasoning Mode**: Advanced reasoning capabilities for complex queries
+- **Streaming Responses**: Real-time response streaming
+- **Conversation History**: Automatic message history management
+- **Simple CLI Interface**: Interactive command-line chat interface
+- **Regenerate Support**: Regenerate previous responses
+
+## API Reference
+
+### Client Initialization
+
+```python
+chatbot = LongCatChat(
+    api_url="https://longcat.chat/api/v1/chat-completion-oversea"  # Default API endpoint
+)
+```
+
+### Send Message
+
+```python
+response = chatbot.send_message(
+    content="Your message here",
+    enable_reason=False,     # Enable reasoning mode
+    enable_search=False,     # Enable web search
+    regenerate=False         # Regenerate last response
+)
+```
+
+### Message with Search and Reasoning
+
+```python
+# Enable both search and reasoning for comprehensive responses
+response = chatbot.send_message(
+    "What are the latest developments in AI?",
+    enable_search=True,      # Get current information
+    enable_reason=True       # Apply advanced reasoning
+)
+print(response)
+```
+
+### Conversation Management
+
+```python
+# Clear conversation history
+chatbot.clear_history()
+
+# Access conversation ID
+print(f"Current conversation: {chatbot.conversation_id}")
+
+# View message history
+for message in chatbot.message_history:
+    print(f"{message['role']}: {message['content']}")
+```
+
+## Interactive CLI Mode
+
+Run the interactive command-line interface:
+
+```bash
+python chat.py
+```
+
+### CLI Commands
+
+- **Regular message**: Type any message to chat
+- **`/reason`**: Toggle reasoning mode on/off
+- **`/search`**: Toggle search mode on/off
+- **`exit`**: Quit the application
+
+Example CLI session:
+```
+You: /reason
+Reason is now enabled
+You: /search
+Search is now enabled
+You: What are the latest breakthroughs in quantum computing?
+LongCat: [Response with search results and reasoning...]
+You: exit
+```
+
+## Advanced Usage
+
+### Custom API Headers
+
+The client uses these default headers:
+```python
+headers = {
+    "accept": "text/event-stream,application/json",
+    "content-type": "application/json",
+    "m-appkey": "fe_com.sankuai.friday.fe.longcat",
+    "x-client-language": "en"
+}
+```
+
+### Streaming Response Processing
+
+The client automatically handles Server-Sent Events (SSE) streaming:
+
+```python
+# The send_message method processes streaming responses internally
+response = chatbot.send_message("Tell me a story")
+# Full response is returned after streaming completes
+```
+
+### Message History Structure
+
+Each message in history contains:
+```python
+{
+    "role": "user" | "assistant",
+    "content": "message content",
+    "chatStatus": "FINISHED" | "LOADING",
+    "messageId": int,
+    "idType": "custom"
+}
+```
+
+### Regenerating Responses
+
+```python
+# Regenerate the last assistant response
+response = chatbot.send_message(
+    "Your original message",
+    regenerate=True
+)
+```
+
+## API Payload Structure
+
+The client sends structured payloads to the LongCat API:
+
+```python
+payload = {
+    "content": "User message",
+    "messages": [/* message history array */],
+    "reasonEnabled": 1,  # or 0
+    "searchEnabled": 1,  # or 0
+    "regenerate": 1      # or 0
+}
+```
+
+## Response Format
+
+LongCat responses are streamed as JSON objects:
+```json
+{
+    "choices": [{
+        "delta": {
+            "content": "Response chunk"
+        }
+    }],
+    "conversationId": "unique-conversation-id"
+}
+```
+
+## Error Handling
+
+```python
 import requests
-from typing import Dict, List, Optional
 
+try:
+    response = chatbot.send_message("Hello")
+except requests.exceptions.RequestException as e:
+    print(f"Network error: {e}")
+except json.JSONDecodeError as e:
+    print(f"Response parsing error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
 
-class LongCatChat:
-    """A class to interact with the LongCat chat API."""
+## Architecture
 
-    def __init__(self, api_url: str = "https://longcat.chat/api/v1/chat-completion-oversea"):
-        """
-        Initialize LongCatChat instance.
+The project structure:
 
-        Args:
-            api_url (str): API endpoint URL
-        """
-        self.api_url = api_url
-        self.headers = {
-            "accept": "text/event-stream,application/json",
-            "content-type": "application/json",
-            "m-appkey": "fe_com.sankuai.friday.fe.longcat",
-            "x-client-language": "en"
-        }
-        self.conversation_id = None
-        self.message_history: List[Dict] = []
+```
+longcat-unofficial/
+├── chat.py              # Main LongCatChat class
+├── README.md           # This file
+└── requirements.txt    # Dependencies (if created)
+```
 
-    def send_message(
-        self,
-        content: str,
-        enable_reason: bool = False,
-        enable_search: bool = False,
-        regenerate: bool = False
-    ) -> str:
-        """
-        Send a message to the chat API.
+### Core Components
 
-        Args:
-            content (str): Message content to send
+- **LongCatChat**: Main client class handling API communication
+- **Message History**: Automatic conversation state management
+- **Streaming Handler**: SSE response processing
+- **CLI Interface**: Interactive command-line chat
 
-        Returns:
-            str: Response from the API
-        """
-        payload = {
-            "content": content,
-            "messages": self._prepare_messages(content),
-            "reasonEnabled": 1 if enable_reason else 0,
-            "searchEnabled": 1 if enable_search else 0,
-            "regenerate": 1 if regenerate else 0
-        }
-        response = requests.post(
-            self.api_url,
-            headers=self.headers,
-            json=payload,
-            stream=True
-        )
+## Requirements
 
-        full_response = ""
-        for line in response.iter_lines():
-            if line:
-                data = json.loads(line.decode('utf-8').replace('data:', ''))
-                if 'choices' in data and data['choices'][0]['delta'].get('content'):
-                    full_response += data['choices'][0]['delta']['content']
-                if not self.conversation_id and data.get('conversationId'):
-                    self.conversation_id = data['conversationId']
+- Python 3.6+
+- requests library
 
-        self._update_history(content, full_response)
-        return full_response
+## Features Overview
 
-    def _prepare_messages(self, content: str) -> List[Dict]:
-        """
-        Prepare message history for API request.
+| Feature | Description | CLI Command |
+|---------|-------------|-------------|
+| Basic Chat | Standard conversational AI | Just type your message |
+| Search Mode | Web search integration | `/search` to toggle |
+| Reasoning Mode | Advanced logical reasoning | `/reason` to toggle |
+| History Management | Automatic conversation tracking | Built-in |
+| Streaming | Real-time response delivery | Automatic |
+| Regeneration | Retry last response | Use `regenerate=True` |
 
-        Args:
-            content (str): Current message content
+## Limitations
 
-        Returns:
-            List[Dict]: Formatted message history
-        """
-        messages = self.message_history.copy()
-        messages.append({
-            "role": "user",
-            "content": content,
-            "chatStatus": "FINISHED",
-            "messageId": len(messages) * 2 + 1,
-            "idType": "custom"
-        })
-        messages.append({
-            "role": "assistant",
-            "content": "",
-            "chatStatus": "LOADING",
-            "messageId": len(messages) * 2 + 2,
-            "idType": "custom"
-        })
-        return messages
+- **Unofficial**: Not officially supported by LongCat
+- **API Dependent**: Relies on LongCat's public API endpoint
+- **No Authentication**: Uses public headers (no personal API key required)
+- **Network Dependent**: Requires internet connection for all features
 
-    def _update_history(self, user_msg: str, assistant_msg: str) -> None:
-        """
-        Update message history after exchange.
+## Contributing
 
-        Args:
-            user_msg (str): User's message
-            assistant_msg (str): Assistant's response
-        """
-        self.message_history.append({
-            "role": "user",
-            "content": user_msg,
-            "chatStatus": "FINISHED",
-            "messageId": len(self.message_history) * 2 + 1,
-            "idType": "custom"
-        })
-        self.message_history.append({
-            "role": "assistant",
-            "content": assistant_msg,
-            "chatStatus": "FINISHED",
-            "messageId": len(self.message_history) * 2 + 2,
-            "idType": "custom"
-        })
+Contributions are welcome! Areas for improvement:
 
-    def clear_history(self) -> None:
-        """Clear chat history and conversation ID."""
-        self.message_history = []
-        self.conversation_id = None
+- Error handling enhancements
+- Additional CLI features
+- Response formatting options
+- Configuration file support
+- Async/await support
 
-if __name__ == "__main__":
-    chatbot = LongCatChat()
-    enable_reason = False
-    enable_search = False
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            break
-        if user_input.lower() == "/reason":
-            enable_reason = not enable_reason
-            print(f"Reason is now {'enabled' if enable_reason else 'disabled'}")
-            continue
-        if user_input.lower() == "/search":
-            enable_search = not enable_search
-            print(f"Search is now {'enabled' if enable_search else 'disabled'}")
-            continue
-        response = chatbot.send_message(
-            user_input,
-            enable_reason=enable_reason,
-            enable_search=enable_search
-        )
-        print(f"LongCat: {response}")
+## License
+
+This project is licensed under the MIT License.
+
+## Disclaimer
+
+This is an unofficial client for LongCat Chat. It is not affiliated with, endorsed by, or supported by LongCat or its parent company. Use at your own discretion and respect the service's terms of use.
+
+## Author
+
+Community-driven unofficial LongCat client
+
+## Support
+
+For issues, questions, or suggestions, please open an issue on the GitHub repository.
+
+---
+
+**Note**: This client provides unlimited access with no billing, but please use responsibly and respect the LongCat service.
